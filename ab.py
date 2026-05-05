@@ -67,7 +67,7 @@ with st.sidebar:
             st.rerun()
 
 # --- ၄။ ကျမ်းချက်ကံစမ်းခြင်း ---
-st.subheader(f"📖 ကျမ်းချက်ကံစမ်းခြင်း (စုစုပေါင်း {len(bible_list)} ချက်)")
+st.subheader(f"📖 ကျမ်းချက်ရွေးချယ်ခြင်း (စုစုပေါင်း {len(bible_list)} ချက်)")
 if st.button("ယနေ့အတွက် ကျမ်းချက် ဘာလဲ? ကြည့်မယ် 🎲"):
     res = random.choice(bible_list)
     st.session_state['v_ref'] = f"{res['book']} {res['chapter']}:{res['verse']}"
@@ -83,7 +83,7 @@ st.divider()
 st.subheader("✨ တာဝန်ကျသူ ရွေးချယ်ခြင်း")
 if st.button("ဘယ်သူတွေ တာဝန်ကျမလဲ ကြည့်မယ် ✨"):
     if len(family_members) >= 2:
-        progress_text = "🎲 နာမည်များ ရွေးချယ်နေပါပြီ... (၇ စက္ကန့် စောင့်ပါ)"
+        progress_text = "🎲 နာမည်များ ရွေးချယ်နေပါပြီ... (ခေတ္တ စောင့်ပါ)"
         my_bar = st.progress(0, text=progress_text)
         
         # ၇ စက္ကန့် စောင့်ရန် (Loading bar ပြပေးခြင်း)
