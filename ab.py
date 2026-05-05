@@ -100,5 +100,7 @@ if st.button("ဘယ်သူတွေ တာဝန်ကျမလဲ ကြည�
 
 # ရလဒ်များကို ပြသခြင်း
 if 'leader' in st.session_state and 'teacher' in st.session_state:
-    st.markdown(f"### 🎤 ခွန်အားကြီးသော ဆုတောင်းခြင်း ဦးဆောင်သူ: **{st.session_state['leader']}**")
-    st.markdown(f"### 📖  ရှင်သန်လွတ်မြောက်ခြင်းသို့ ကျမ်းစာအားဖြင့် လမ်းပြသွန်သင်သူ: **{st.session_state['teacher']}**")
+    # ဦးဆောင်သူအတွက်
+    st.markdown(f"<h3 style='text-align: center; font-size: 20px;'>🙏 ခွန်အားကြီးသော ဆုတောင်းခြင်း ဦးဆောင်သူ - {st.session_state['leader']}</h3>", unsafe_allow_html=True)
+    # သွန်သင်သူအတွက် (variable ကို 'teacher' လို့ ပြောင်းလိုက်ပါတယ်)
+    st.markdown(f"<h3 style='text-align: center; font-size: 20px;'>📖 ရှင်သန်လွတ်မြောက်ခြင်းသို့ ကျမ်းစာအားဖြင့် လမ်းပြသွန်သင်သူ - {st.session_state['teacher']}</h3>", unsafe_allow_html=True)
