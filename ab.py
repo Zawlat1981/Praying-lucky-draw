@@ -66,7 +66,7 @@ with st.sidebar:
 
 # --- ၄။ ကျမ်းချက်ကံစမ်းခြင်း ---
 st.subheader(f"📖 ကျမ်းချက်ကံစမ်းခြင်း (စုစုပေါင်း {len(bible_list)} ချက်)")
-if st.button("ယနေ့အတွက် ကျမ်းချက် ဘာလဲ 🎲"):
+if st.button("ယနေ့အတွက် ကျမ်းချက် ဘာလဲ? ကြည့်မယ် 🎲"):
     res = random.choice(bible_list)
     st.session_state['v_ref'] = f"{res['book']} {res['chapter']}:{res['verse']}"
     st.session_state['v_text'] = res['text']
