@@ -98,5 +98,5 @@ if st.button("ဘယ်သူတွေ တာဝန်ကျမလဲ ကြည�
 
 if 'leader' in st.session_state:
     c1, c2 = st.columns(2)
-    c1.metric("🙏 ဆုတောင်းဦးဆောင်", st.session_state['leader'])
-    c2.metric("📖 သွန်သင်သူ", st.session_state['teacher'])
+    c1.metric("🙏 ခွန်အားကြီးသော ဆုတောင်းခြင်းဦးဆောင်သူ", st.session_state['leader'])
+    c2.metric("📖 ဘုရားစကားတော်ကို သွန်သင်လမ်းပြသူ", st.session_state['teacher'])
