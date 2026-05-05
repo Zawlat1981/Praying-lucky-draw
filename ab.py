@@ -28,9 +28,11 @@ def load_family():
 bible_list = load_bible()
 family_members = load_family()
 
-# --- ၂။ App UI ---
+# --- ၂။ App UI Configuration ---
 st.set_page_config(page_title="မိသားစုဝတ်ပြုခြင်း", page_icon="🙏")
-st.title("🙏 မိသားစုဝတ်ပြုခြင်း အစီအစဉ်")
+
+# ခေါင်းစဉ်ကို ဖုန်းမှာကြည့်ရ အဆင်ပြေအောင် အရွယ်အစား ချိန်ညှိခြင်း
+st.markdown("<h2 style='text-align: center; font-size: 28px;'>🙏 မိသားစုဝတ်ပြုခြင်းအစီအစဉ်</h2>", unsafe_allow_html=True)
 
 # --- ၃။ Sidebar (ကျမ်းချက်နှင့် မိသားစုဝင် အသစ်တိုးရန်) ---
 with st.sidebar:
@@ -96,7 +98,7 @@ if st.button("ဘယ်သူတွေ တာဝန်ကျမလဲ ကြည�
     else:
         st.error("မိသားစုဝင် အနည်းဆုံး ၂ ယောက်ရှိမှ ရွေးလို့ရမှာပါဗျ။")
 
-if 'leader' in st.session_state:
-    c1, c2 = st.columns(2)
-    c1.metric("🙏 ခွန်အားကြီးသော ဆုတောင်းခြင်းဦးဆောင်သူ", st.session_state['leader'])
-    c2.metric("📖 ဘုရားစကားတော်ကို သွန်သင်လမ်းပြသူ", st.session_state['teacher'])
+# ရလဒ်များကို ပြသခြင်း
+if 'leader' in st.session_state and 'teacher' in st.session_state:
+    st.markdown(f"### 🎤 ဦးဆောင်သူ: **{st.session_state['leader']}**")
+    st.markdown(f"### 📖 ကျမ်းစာဝေငှသူ: **{st.session_state['teacher']}**")
