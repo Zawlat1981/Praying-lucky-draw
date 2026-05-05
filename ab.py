@@ -3,95 +3,100 @@ import random
 import pandas as pd
 from datetime import datetime
 import os
+import json
 import time
 
-# --- ၁။ Configurations & Setup ---
-st.set_page_config(page_title="မိသားစုဝတ်ပြုခြင်း", page_icon="🙏", layout="centered")
+# --- ၁။ Setup နှင့် Data သိမ်းဆည်းမည့်ဖိုင်များ ---
+BIBLE_FILE = 'bible.json'
+FAMILY_FILE = 'family.json'
 
-family_members = ["Haysharya", "Haythuya", "Aung Zaw Latt"]
-history_file = "prayer_teaching_history.csv"
+# ကျမ်းစာဖိုင် ဖတ်ရန်/သိမ်းရန်
+def load_bible():
+    if os.path.exists(BIBLE_FILE):
+        with open(BIBLE_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            return data if data else []
+    return [{"book": "ယောဟန်", "chapter": 3, "verse": 16, "text": "ဘုရားသခင်သည် လောကီသားတို့ကို ချစ်တော်မူ၏။"}]
 
-# ကျမ်းစာဖိုင်ကို Cache လုပ်ပြီး ဖတ်ခြင်း
-@st.cache_data
-def get_full_bible():
-    url = "https://raw.githubusercontent.com/daandrei/bible-myanmar-json/master/myanmar_bible.json"
-    return pd.read_json(url)
+# မိသားစုဝင်ဖိုင် ဖတ်ရန်/သိမ်းရန်
+def load_family():
+    if os.path.exists(FAMILY_FILE):
+        with open(FAMILY_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return ["Haysharya", "Haythuya", "Aung Zaw Latt"]
 
-# --- ၂။ UI Header ---
+bible_list = load_bible()
+family_members = load_family()
+
+# --- ၂။ App UI ---
+st.set_page_config(page_title="မိသားစုဝတ်ပြုခြင်း", page_icon="🙏")
 st.title("🙏 မိသားစုဝတ်ပြုခြင်း အစီအစဉ်")
-st.write("✨ ဒီနေ့ည ဆုတောင်းခြင်းနဲ့ နှုတ်ကပတ်တော် သွန်သင်ခြင်းအတွက် ဘုရားသခင် ဘယ်သူ့ကိုတာဝန်ပေးမလဲ ✨")
 
-# --- ၃။ ကျမ်းချက်ကံစမ်းခြင်း အပိုင်း ---
-st.markdown("### 📖 ယနေ့အတွက် နှုတ်ကပတ်တော်")
-
-if st.button("ဘုရားသခင် ဘယ်ကျမ်းချက်ကို ပေးမလဲကြည့်မယ် 🎲"):
-    with st.spinner('ကျမ်းစာအုပ်ထဲမှာ ရှာဖွေနေပါတယ်...'):
-        try:
-            bible = get_full_bible()
-            random_row = bible.sample(n=1).iloc[0]
-            # Session state ထဲမှာ သိမ်းထားမှ တခြား button နှိပ်ရင် ပျောက်မသွားမှာပါ
-            st.session_state['verse_ref'] = f"{random_row['book']} {random_row['chapter']}:{random_row['verse']}"
-            st.session_state['verse_text'] = random_row['text']
-        except Exception as e:
-            st.error("ကျမ်းစာဖတ်လို့မရပါ (အင်တာနက်စစ်ဆေးပါ)")
-
-# ကျမ်းချက်ရှိရင် ပြပေးမယ်
-if 'verse_ref' in st.session_state:
-    st.success(f"**{st.session_state['verse_ref']}**")
-    st.info(st.session_state['verse_text'])
-
-st.markdown("---")
-
-# --- ၄။ တာဝန်ကျသူ ရွေးချယ်ခြင်း အပိုင်း ---
-if st.button("တာဝန်ပေးခြင်းခံရသူများ ရွေးချယ်ပါမည် ✨", key="spin_button"):
-    with st.spinner('🎲 နာမည်များ ရွေးချယ်နေပါပြီ...'):
-        time.sleep(7) # ၁၀ စက္ကန့်က ကြာလွန်းလို့ ၂ စက္ကန့်ပဲ ထားပေးလိုက်ပါတယ်
-        selected = random.sample(family_members, 2)
-        st.session_state['prayer_leader'] = selected[0]
-        st.session_state['teacher'] = selected[1]
-    st.balloons()
-
-# ရွေးချယ်ပြီးသားရှိရင် ပြပေးမယ်
-if 'prayer_leader' in st.session_state:
-    col1, col2 = st.columns(2)
-    with col1:
-        st.metric(label="🙏 ဆုတောင်းခြင်း ဦးဆောင်သူ", value=st.session_state['prayer_leader'])
-    with col2:
-        st.metric(label="📖 တရားဟောပြော/သွန်သင်သူ", value=st.session_state['teacher'])
-
-    st.markdown("---")
+# --- ၃။ Sidebar (ကျမ်းချက်နှင့် မိသားစုဝင် အသစ်တိုးရန်) ---
+with st.sidebar:
+    st.header("⚙️ အသစ်ထည့်ရန်")
     
-    # --- ၅။ မှတ်တမ်းသွင်းခြင်း Form ---
-    with st.form("record_form"):
-        st.write("📝 **ဝတ်ပြုခြင်း မှတ်တမ်းသွင်းရန်**")
-        
-        # ကျမ်းချက်ရှိရင် အလိုအလျောက် ခေါင်းစဉ်ထဲ ထည့်ပေးထားမယ်
-        default_topic = st.session_state.get('verse_ref', "")
-        topic = st.text_input("သွန်သင်ချက်/ဆုတောင်းချက် ခေါင်းစဉ်:", value=default_topic)
-        
-        submitted = st.form_submit_button("မှတ်တမ်းသိမ်းမည် ✅")
-        
-        if submitted and topic:
-            current_date = datetime.now().strftime("%Y-%m-%d %H:%M")
-            new_data = {
-                "ရက်စွဲ": [current_date],
-                "ဆုတောင်းခြင်းဦးဆောင်သူ": [st.session_state['prayer_leader']],
-                "တရားဟောပြောသူ": [st.session_state['teacher']],
-                "အကြောင်းအရာ": [topic]
-            }
-            df = pd.DataFrame(new_data)
-            
-            if not os.path.isfile(history_file):
-                df.to_csv(history_file, index=False, encoding='utf-8')
-            else:
-                df.to_csv(history_file, mode='a', index=False, header=False, encoding='utf-8')
-            st.success(f"✅ မှတ်တမ်း သိမ်းဆည်းပြီးပါပြီ။")
+    # မိသားစုဝင်တိုးရန်
+    st.subheader("👥 မိသားစုဝင် အသစ်တိုးခြင်း")
+    new_member = st.text_input("နာမည်အသစ်")
+    if st.button("မိသားစုဝင်စာရင်းထဲသို့ ထည့်မည်"):
+        if new_member and new_member not in family_members:
+            family_members.append(new_member)
+            with open(FAMILY_FILE, 'w', encoding='utf-8') as f:
+                json.dump(family_members, f, ensure_ascii=False, indent=4)
+            st.success(f"✅ {new_member} ကို ထည့်ပြီးပါပြီ။")
+            st.rerun()
 
-# --- ၆။ မှတ်တမ်းဟောင်းများ ပြသခြင်း ---
-st.markdown("---")
-st.subheader("📜 ဝတ်ပြုခြင်း မှတ်တမ်းဟောင်းများ")
-if os.path.isfile(history_file):
-    history_df = pd.read_csv(history_file)
-    st.dataframe(history_df.sort_values(by="ရက်စွဲ", ascending=False), use_container_width=True)
-else:
-    st.write("မှတ်တမ်း မရှိသေးပါ။")
+    st.divider()
+    
+    # ကျမ်းချက်တိုးရန်
+    st.subheader("📖 ကျမ်းချက်အသစ်ထည့်ခြင်း")
+    new_book = st.text_input("ကျမ်းအမည်")
+    new_chap = st.number_input("အခန်းကြီး", min_value=1, step=1)
+    new_verse = st.number_input("အခန်းငယ်", min_value=1, step=1)
+    new_text = st.text_area("ကျမ်းစာသား")
+    if st.button("ကျမ်းစာဖိုင်ထဲသို့ သိမ်းမည်"):
+        if new_book and new_text:
+            new_entry = {"book": new_book, "chapter": int(new_chap), "verse": int(new_verse), "text": new_text}
+            bible_list.append(new_entry)
+            with open(BIBLE_FILE, 'w', encoding='utf-8') as f:
+                json.dump(bible_list, f, ensure_ascii=False, indent=4)
+            st.success("✅ ကျမ်းချက်အသစ်ကို သိမ်းပြီးပါပြီ။")
+            st.rerun()
+
+# --- ၄။ ကျမ်းချက်ကံစမ်းခြင်း ---
+st.subheader(f"📖 ကျမ်းချက်ကံစမ်းခြင်း (စုစုပေါင်း {len(bible_list)} ချက်)")
+if st.button("ယနေ့အတွက် ကျမ်းချက် ဘာလဲ 🎲"):
+    res = random.choice(bible_list)
+    st.session_state['v_ref'] = f"{res['book']} {res['chapter']}:{res['verse']}"
+    st.session_state['v_text'] = res['text']
+
+if 'v_ref' in st.session_state:
+    st.success(f"**{st.session_state['v_ref']}**")
+    st.info(st.session_state['v_text'])
+
+st.divider()
+
+# --- ၅။ တာဝန်ကျသူ ရွေးချယ်ခြင်း (၇ စက္ကန့် စောင့်ဆိုင်းချိန်) ---
+st.subheader("✨ တာဝန်ကျသူ ရွေးချယ်ခြင်း")
+if st.button("ဘယ်သူတွေ တာဝန်ကျမလဲ ကြည့်မယ် ✨"):
+    if len(family_members) >= 2:
+        progress_text = "🎲 နာမည်များ ရွေးချယ်နေပါပြီ... (၇ စက္ကန့် စောင့်ပါ)"
+        my_bar = st.progress(0, text=progress_text)
+        
+        # ၇ စက္ကန့် စောင့်ရန် (Loading bar ပြပေးခြင်း)
+        for percent_complete in range(100):
+            time.sleep(0.07) # 0.07 * 100 = 7 seconds
+            my_bar.progress(percent_complete + 1, text=progress_text)
+        
+        selected = random.sample(family_members, 2)
+        st.session_state['leader'] = selected[0]
+        st.session_state['teacher'] = selected[1]
+        st.balloons()
+    else:
+        st.error("မိသားစုဝင် အနည်းဆုံး ၂ ယောက်ရှိမှ ရွေးလို့ရမှာပါဗျ။")
+
+if 'leader' in st.session_state:
+    c1, c2 = st.columns(2)
+    c1.metric("🙏 ဆုတောင်းဦးဆောင်", st.session_state['leader'])
+    c2.metric("📖 သွန်သင်သူ", st.session_state['teacher'])
