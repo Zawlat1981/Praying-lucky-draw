@@ -34,37 +34,58 @@ st.set_page_config(page_title="မိသားစုဝတ်ပြုခြင�
 # ခေါင်းစဉ်ကို ဖုန်းမှာကြည့်ရ အဆင်ပြေအောင် အရွယ်အစား ချိန်ညှိခြင်း
 st.markdown("<h2 style='text-align: center; font-size: 28px;'>🙏 မိသားစုဝတ်ပြုခြင်းအစီအစဉ်</h2>", unsafe_allow_html=True)
 
+# Main မှာ Save Message ရှိရင် ပြမယ် (rerun ပြီးလည်း မပျောက်အောင်)
+if 'save_msg' in st.session_state:
+    st.success(st.session_state['save_msg'])
+    del st.session_state['save_msg']
+
 # --- ၃။ Sidebar (ကျမ်းချက်နှင့် မိသားစုဝင် အသစ်တိုးရန်) ---
 with st.sidebar:
-    st.header("⚙️ အသစ်ထည့်ရန်")
+    st.header("⚙ အသစ်ထည့်ရန်")
     
     # မိသားစုဝင်တိုးရန်
     st.subheader("👥 မိသားစုဝင် အသစ်တိုးခြင်း")
-    new_member = st.text_input("နာမည်အသစ်")
+    new_member = st.text_input("နာမည်အသစ်", key="family_member_input")
     if st.button("မိသားစုဝင်စာရင်းထဲသို့ ထည့်မည်"):
         if new_member and new_member not in family_members:
             family_members.append(new_member)
             with open(FAMILY_FILE, 'w', encoding='utf-8') as f:
                 json.dump(family_members, f, ensure_ascii=False, indent=4)
-            st.success(f"✅ {new_member} ကို ထည့်ပြီးပါပြီ။")
+            # ✅ Fix - Toast + Success + Balloons + Sleep + Rerun
+            st.toast(f"✅ {new_member} ကို ထည့်ပြီးပါပြီ!", icon="👥")
+            st.session_state['save_msg'] = f"✅ {new_member} ကို ထည့်ပြီးပါပြီ - ကျမ်းစာကိုသိမ်းဆည်းပြီးပါပြီ!"
+            st.success(f"✅ {new_member} ကို ထည့်ပြီးပါပြီ - ကျမ်းစာကိုသိမ်းဆည်းပြီးပါပြီ!")
+            st.balloons()
+            time.sleep(1.5)
             st.rerun()
+        elif new_member in family_members:
+            st.warning(f"⚠️ {new_member} က စာရင်းထဲမှာ ရှိနေပြီးသားပါ!")
+        else:
+            st.error("❌ နာမည် ထည့်ပါ!")
 
     st.divider()
     
     # ကျမ်းချက်တိုးရန်
     st.subheader("📖 ကျမ်းချက်အသစ်ထည့်ခြင်း")
-    new_book = st.text_input("ကျမ်းအမည်")
-    new_chap = st.number_input("အခန်းကြီး", min_value=1, step=1)
-    new_verse = st.number_input("အခန်းငယ်", min_value=1, step=1)
-    new_text = st.text_area("ကျမ်းစာသား")
+    new_book = st.text_input("ကျမ်းအမည်", key="bible_book")
+    new_chap = st.number_input("အခန်းကြီး", min_value=1, step=1, key="bible_chap")
+    new_verse = st.number_input("အခန်းငယ်", min_value=1, step=1, key="bible_verse")
+    new_text = st.text_area("ကျမ်းစာသား", key="bible_text")
     if st.button("ကျမ်းစာဖိုင်ထဲသို့ သိမ်းမည်"):
         if new_book and new_text:
             new_entry = {"book": new_book, "chapter": int(new_chap), "verse": int(new_verse), "text": new_text}
             bible_list.append(new_entry)
             with open(BIBLE_FILE, 'w', encoding='utf-8') as f:
                 json.dump(bible_list, f, ensure_ascii=False, indent=4)
-            st.success("✅ ကျမ်းချက်အသစ်ကို သိမ်းပြီးပါပြီ။")
+            # ✅ Fix - အဓိက ပြင်ထားတာ ဒီမှာ!
+            st.toast("✅ ကျမ်းစာကိုသိမ်းဆည်းပြီးပါပြီ!", icon="📖")
+            st.session_state['save_msg'] = "✅ ကျမ်းစာကိုသိမ်းဆည်းပြီးပါပြီ!"
+            st.success("✅ ကျမ်းစာကိုသိမ်းဆည်းပြီးပါပြီ!")
+            st.balloons()
+            time.sleep(1.5)
             st.rerun()
+        else:
+            st.warning("⚠️ ကျမ်းအမည် နှင့် ကျမ်းစာသား ထည့်ပါ!")
 
 # --- ၄။ ကျမ်းချက်ကံစမ်းခြင်း ---
 st.subheader(f"📖 ကျမ်းချက်ရွေးချယ်ခြင်း (စုစုပေါင်း {len(bible_list)} ချက်)")
@@ -88,7 +109,7 @@ if st.button("ဘယ်သူတွေ တာဝန်ကျမလဲ ကြည�
         
         # ၇ စက္ကန့် စောင့်ရန် (Loading bar ပြပေးခြင်း)
         for percent_complete in range(100):
-            time.sleep(0.07) # 0.07 * 100 = 7 seconds
+            time.sleep(0.05) # 0.05 * 100 = 5 seconds
             my_bar.progress(percent_complete + 1, text=progress_text)
         
         selected = random.sample(family_members, 2)
@@ -102,5 +123,5 @@ if st.button("ဘယ်သူတွေ တာဝန်ကျမလဲ ကြည�
 if 'leader' in st.session_state and 'teacher' in st.session_state:
     # ဦးဆောင်သူအတွက်
     st.markdown(f"<h3 style='text-align: center; font-size: 18px;'>🙏 ခွန်အားကြီးသော ဆုတောင်းခြင်း ဦးဆောင်သူ - {st.session_state['leader']}</h3>", unsafe_allow_html=True)
-    # သွန်သင်သူအတွက် (variable ကို 'teacher' လို့ ပြောင်းလိုက်ပါတယ်)
+    # သွန်သင်သူအတွက်
     st.markdown(f"<h3 style='text-align: center; font-size: 18px;'>📖 ရှင်သန်လွတ်မြောက်ခြင်းသို့ ကျမ်းစာအားဖြင့် လမ်းပြသွန်သင်သူ - {st.session_state['teacher']}</h3>", unsafe_allow_html=True)
