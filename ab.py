@@ -7,6 +7,7 @@ from pathlib import Path
 import psycopg
 import streamlit as st
 
+import backup
 import storage
 
 logger = logging.getLogger(__name__)
@@ -165,3 +166,5 @@ if "leader" in st.session_state and "teacher" in st.session_state:
     st.write(st.session_state["leader"])
     st.subheader("📖 ရှင်သန်လွတ်မြောက်ခြင်းသို့ ကျမ်းစာအားဖြင့် လမ်းပြသွန်သင်သူ")
     st.write(st.session_state["teacher"])
+
+backup.show_backup_controls(config)

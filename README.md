@@ -52,3 +52,32 @@ pretending data was saved.
 
 Favorites and members are shared by all visitors. This app has no login or
 access control, so anyone who can open the app can view and add entries.
+
+## Manual backup and restore
+
+Add a separate, strong, unique admin password of at least 16 characters to
+Streamlit Community Cloud's Secrets (outside the `[postgresql]` section):
+
+```toml
+[backup]
+admin_password = "replace-with-a-long-unique-password"
+```
+
+Do not post or commit the real password. In the app, sign in under **Database
+Backup & Restore**, prepare a backup, and download the JSON file. Store it
+securely outside the app; it contains family names, custom verses, and
+favorites. Downloads are manual, not scheduled or encrypted. The static Judson
+Bible, database credentials, other database tables, and app code are not
+included; retain the repository and configure credentials separately.
+
+To restore, upload a backup created by this feature, check the confirmation
+box, and press Restore. Restore merges into existing data, skips exact
+duplicates, and writes all entries in one transaction. Invalid files are
+rejected before writing. The maximum backup file size is 20 MiB. Keep previous
+backup copies and test recovery periodically; this is not a full PostgreSQL
+backup and does not replace provider-level backups.
+
+Five failed admin attempts temporarily lock backup login for five minutes in
+the current app process. This is not a substitute for provider-level access
+controls or rate limiting, and restarting or scaling the app resets that limit.
+The rest of the app remains publicly accessible. Sign out after use.
