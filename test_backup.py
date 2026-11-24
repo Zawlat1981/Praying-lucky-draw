@@ -1,27 +1,66 @@
 import json
 import unittest
+from datetime import datetime, timezone
+from uuid import UUID, uuid4
 from unittest.mock import MagicMock, patch
 
 import psycopg
 from streamlit.testing.v1 import AppTest
 
 import backup
+import family_auth
 import storage
 
 
 class BackupTest(unittest.TestCase):
     def setUp(self):
         self.verse = {"book": "Test", "chapter": 1, "verse": 2, "text": "Test text"}
-        self.data = {"version": 1, "members": ["A", "B"], "custom_verses": [self.verse], "favorites": [self.verse]}
+        self.history = {
+            "id": str(uuid4()),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "verse": self.verse,
+            "leader": "A",
+            "teacher": "B",
+            "teaching": {
+                "title": "Title",
+                "theme": "Theme",
+                "reading": "Reading",
+                "outline": ["One point"],
+                "discussion": "Discussion",
+                "application": "Application",
+                "prayer": "Prayer",
+                "source_note": "Offline",
+            },
+            "prayer_audio_file_id": "drive-audio-id",
+            "teaching_audio_file_id": None,
+        }
+        self.data = {
+            "version": 2,
+            "members": ["A", "B"],
+            "custom_verses": [self.verse],
+            "favorites": [self.verse],
+            "history": [self.history],
+        }
         self.config = {"host": "example", "user": "user", "password": "password", "database": "db"}
 
     def test_backup_contains_consistent_application_data(self):
         db = MagicMock()
         cursor = db.cursor.return_value.__enter__.return_value
-        cursor.fetchall.side_effect = [[{"name": "A"}, {"name": "B"}], [self.verse], [self.verse]]
+        cursor.fetchall.side_effect = [
+            [{"name": "A"}, {"name": "B"}],
+            [self.verse],
+            [self.verse],
+            [
+                {
+                    **self.history,
+                    "id": UUID(self.history["id"]),
+                    "created_at": datetime.fromisoformat(self.history["created_at"]),
+                }
+            ],
+        ]
         with patch.object(storage.psycopg, "connect", return_value=db):
             exported = json.loads(backup.create_backup(self.config))
-        for field in ("version", "members", "custom_verses", "favorites"):
+        for field in ("version", "members", "custom_verses", "favorites", "history"):
             self.assertEqual(exported[field], self.data[field])
         self.assertIn("REPEATABLE READ READ ONLY", cursor.execute.call_args_list[0].args[0])
         db.commit.assert_called_once()
@@ -29,16 +68,22 @@ class BackupTest(unittest.TestCase):
     def test_restore_merges_and_counts_new_entries(self):
         db = MagicMock()
         cursor = db.cursor.return_value.__enter__.return_value
-        cursor.execute.side_effect = lambda *args: setattr(cursor, "rowcount", 0 if args[1] == ("A",) else 1)
+        cursor.execute.side_effect = lambda *args: setattr(
+            cursor,
+            "rowcount",
+            0 if args[0].startswith("INSERT INTO prayer_members") and args[1] == ("A",) else 1,
+        )
         with patch.object(storage.psycopg, "connect", return_value=db):
             counts = backup.restore_backup(self.config, self.data)
-        self.assertEqual(counts, {"members": 1, "custom_verses": 1, "favorites": 1})
+        self.assertEqual(counts, {"members": 1, "custom_verses": 1, "favorites": 1, "history": 1})
         self.assertTrue(all("ON CONFLICT" in call.args[0] for call in cursor.execute.call_args_list))
         db.commit.assert_called_once()
 
     def test_invalid_backup_is_rejected_before_connection(self):
         for data in (
             {"version": 2, "members": [], "custom_verses": [], "favorites": []},
+            {**self.data, "history": [{**self.history, "created_at": "not a date"}]},
+            {**self.data, "history": [{**self.history, "teaching": {}}]},
             {**self.data, "members": [""]},
             {**self.data, "favorites": [{**self.verse, "chapter": True}]},
             {**self.data, "favorites": [{**self.verse, "text": "bad\0text"}]},
@@ -61,12 +106,16 @@ class BackupTest(unittest.TestCase):
     def test_backup_login_and_logout(self):
         backup.login_guard.clear()
         with (
-            patch("streamlit.secrets", {"postgresql": {}, "backup": {"admin_password": "long-test-password"}}),
+            patch("streamlit.secrets", {"postgresql": {}, "family": {"password": "long-family-password"}, "backup": {"admin_password": "long-test-password"}}),
+            patch.object(family_auth, "require_family_password"),
             patch.object(storage, "initialize"),
             patch.object(storage, "list_members", return_value=["A", "B"]),
             patch.object(storage, "list_verses", return_value=[]),
+            patch.object(storage, "count_worship_sessions", return_value=0),
+            patch.object(storage, "list_worship_sessions", return_value=[]),
         ):
-            app = AppTest.from_file("ab.py", default_timeout=15).run()
+            app = AppTest.from_file("ab.py", default_timeout=20)
+            app.run()
             self.assertFalse(any(b.label == "Backup ဖိုင် ပြင်ဆင်မည်" for b in app.button))
             app.text_input(key="backup_password_input").set_value("wrong")
             next(b for b in app.button if b.label == "ဝင်မည်").click().run()
