@@ -7,6 +7,7 @@ from streamlit.testing.v1 import AppTest
 
 import storage
 import family_auth
+import teaching
 
 
 class PrayerAppTest(unittest.TestCase):
@@ -98,13 +99,84 @@ class PrayerAppTest(unittest.TestCase):
             self.assertEqual(len(sessions), 1)
             self.assertTrue(sessions[0]["teaching"]["title"])
             self.assertTrue(any(item.label == "ပြန်ကြည့်ရန် ဝတ်ပြုမှုရွေးပါ" for item in app.sidebar.selectbox))
-            self.assertTrue(any(item.label == "🎙️ ရွေးချယ်ပါက အသံဖမ်းပြီး Google Drive တွင် သိမ်းရန်" for item in app.sidebar.expander))
+            self.assertTrue(any(item.value == "🎙️ ဝတ်ပြုမှု အသံဖမ်းရန်" for item in app.main.subheader))
+            self.assertFalse(any(item.value == "🎙️ ဝတ်ပြုမှု အသံဖမ်းရန်" for item in app.sidebar.subheader))
             next(button for button in app.sidebar.button if button.label == "⭐ ရွေးထားသောကျမ်းချက်ကို မှတ်ထားမည်").click().run()
             self.assertEqual(len(favorites), 1)
             new_session = self.app()
             self.assertFalse(new_session.exception)
             self.assertTrue(any(favorites[0]["text"] == item.value for item in new_session.sidebar.info))
             self.assertTrue(any(item.label == "ပြန်ကြည့်ရန် ဝတ်ပြုမှုရွေးပါ" for item in new_session.sidebar.selectbox))
+
+    def test_recording_controls_follow_sidebar_history_selection(self):
+        sessions = []
+        for index in (1, 2):
+            verse = {"book": f"Book {index}", "chapter": 1, "verse": index, "text": "Text"}
+            sessions.append({
+                "id": f"session-{index}",
+                "created_at": datetime.now(timezone.utc),
+                "verse": verse,
+                "leader": "A",
+                "teacher": "B",
+                "teaching": teaching.make_outline(verse),
+                "prayer_audio_file_id": None,
+                "teaching_audio_file_id": None,
+            })
+
+        with (
+            patch("streamlit.secrets", {"postgresql": {}}),
+            patch.object(family_auth, "require_family_password"),
+            patch.object(storage, "initialize"),
+            patch.object(storage, "list_members", return_value=["A", "B"]),
+            patch.object(storage, "list_verses", return_value=[]),
+            patch.object(storage, "count_worship_sessions", return_value=2),
+            patch.object(storage, "list_worship_sessions", return_value=sessions),
+            patch("drive_storage.show_drive_connection"),
+            patch("recorder.audio_input", return_value=None) as audio_input,
+        ):
+            app = self.app()
+            self.assertFalse(app.exception)
+            selector = next(item for item in app.sidebar.selectbox if item.label == "ပြန်ကြည့်ရန် ဝတ်ပြုမှုရွေးပါ")
+            audio_input.reset_mock()
+            selector.select("session-2").run()
+            self.assertFalse(app.exception)
+            self.assertTrue(any("Book 2 1:2" in item.value for item in app.main.caption))
+            self.assertEqual(
+                [call.kwargs["key"] for call in audio_input.call_args_list],
+                ["audio_prayer_session-2", "audio_teaching_session-2"],
+            )
+
+    def test_recording_is_saved_to_selected_history_role(self):
+        verse = {"book": "Book", "chapter": 1, "verse": 1, "text": "Text"}
+        session = {
+            "id": "session-1",
+            "created_at": datetime.now(timezone.utc),
+            "verse": verse,
+            "leader": "A",
+            "teacher": "B",
+            "teaching": teaching.make_outline(verse),
+            "prayer_audio_file_id": None,
+            "teaching_audio_file_id": None,
+        }
+        recording = {"data": b"audio", "mime_type": "audio/webm"}
+        with (
+            patch("streamlit.secrets", {"postgresql": {}}),
+            patch.object(family_auth, "require_family_password"),
+            patch.object(storage, "initialize"),
+            patch.object(storage, "list_members", return_value=["A", "B"]),
+            patch.object(storage, "list_verses", return_value=[]),
+            patch.object(storage, "count_worship_sessions", return_value=1),
+            patch.object(storage, "list_worship_sessions", return_value=[session]),
+            patch.object(storage, "save_session_audio", return_value=True) as save,
+            patch("drive_storage.show_drive_connection"),
+            patch("drive_storage.upload_recording", return_value="file-id") as upload,
+            patch("recorder.audio_input", return_value=recording),
+        ):
+            app = self.app()
+            app.button(key="upload_prayer_session-1").click().run()
+            self.assertFalse(app.exception)
+            upload.assert_called_once_with({}, "session-1", "prayer", recording)
+            save.assert_called_once_with({}, "session-1", "prayer", "file-id")
 
     def test_database_error_does_not_report_success(self):
         import psycopg

@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="my">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { margin: 0; font-family: sans-serif; color: #333; }
+    .buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+    button { font: inherit; padding: 10px 14px; border: 1px solid #999;
+      border-radius: 6px; background: white; cursor: pointer; }
+    button:disabled { opacity: .45; cursor: default; }
+    #status { margin: 10px 0; }
+    #error { color: #b51c1c; }
+    audio { width: 100%; }
+  </style>
+</head>
+<body>
+  <div class="buttons">
+    <button id="start" type="button">▶ Start</button>
+    <button id="pause" type="button" disabled>⏸ Pause</button>
+    <button id="stop" type="button" disabled>⏹ Stop</button>
+  </div>
+  <p id="status" role="status">Start ကိုနှိပ်ပြီး အသံဖမ်းပါ။</p>
+  <p id="error" role="alert"></p>
+  <audio id="preview" controls hidden></audio>
+  <p><a id="download" hidden>အသံဖိုင်ကို စက်ထဲသိမ်းရန်</a></p>
+  <script src="recorder.js"></script>
+</body>
+</html>

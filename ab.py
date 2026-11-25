@@ -10,6 +10,7 @@ import streamlit as st
 import backup
 import drive_storage
 import family_auth
+import recorder
 import storage
 import teaching
 
@@ -226,49 +227,57 @@ with st.sidebar:
         st.write(f"**လက်တွေ့ကျင့်သုံးရန်:** {selected['teaching']['application']}")
         st.caption(selected["teaching"]["source_note"])
 
-        with st.expander("🎙️ ရွေးချယ်ပါက အသံဖမ်းပြီး Google Drive တွင် သိမ်းရန်"):
-            drive_storage.show_drive_connection(config)
-            audio_jobs = (
-                ("prayer", "ဆုတောင်းဦးဆောင်သူ၏ အသံ", selected["prayer_audio_file_id"]),
-                ("teaching", "သွန်သင်သူ၏ အသံ", selected["teaching_audio_file_id"]),
-            )
-            for role, label, file_id in audio_jobs:
-                st.markdown(f"**{label}**")
-                audio = None
+if records:
+    st.divider()
+    st.subheader("🎙️ ဝတ်ပြုမှု အသံဖမ်းရန်")
+    st.caption(
+        f"Sidebar History တွင် ရွေးထားသော မှတ်တမ်း: "
+        f"{selected['created_at'].astimezone().strftime('%Y-%m-%d %H:%M')} · "
+        f"{selected['verse']['book']} {selected['verse']['chapter']}:{selected['verse']['verse']} · "
+        f"{selected['leader']} / {selected['teacher']}"
+    )
+    drive_storage.show_drive_connection(config)
+    audio_jobs = (
+        ("prayer", "ဆုတောင်းဦးဆောင်သူ၏ အသံ", selected["prayer_audio_file_id"]),
+        ("teaching", "သွန်သင်သူ၏ အသံ", selected["teaching_audio_file_id"]),
+    )
+    for role, label, file_id in audio_jobs:
+        st.markdown(f"**{label}**")
+        audio = None
+        try:
+            audio = recorder.audio_input(key=f"audio_{role}_{chosen_id}", max_bytes=drive_storage.MAX_RECORDING_BYTES)
+        except ValueError:
+            logger.exception("Audio recording widget is unavailable")
+            st.error("အသံဖိုင်ကို app သို့ မပို့နိုင်ပါ။ အသံဖမ်းသည့်နေရာမှ စက်ထဲသိမ်းပါ။")
+        if audio is not None:
+            if st.button(f"☁️ {label} ကို Drive ထဲသိမ်းမည်", key=f"upload_{role}_{chosen_id}"):
+                uploaded_id = None
                 try:
-                    audio = st.audio_input("Record ကိုနှိပ်မှ အသံဖမ်းမည်", key=f"audio_{role}_{chosen_id}")
-                except (OSError, RuntimeError):
-                    logger.exception("Audio recording widget is unavailable")
-                    st.error("ဤ browser တွင် အသံဖမ်းမရပါ။ Microphone ခွင့်ပြုချက်နှင့် browser ကို စစ်ပါ။")
-                if audio is not None:
-                    if audio.size > drive_storage.MAX_RECORDING_BYTES:
-                        st.error("ဖိုင်အရွယ်အစားသည် 200 MiB ထက် ကျော်နေပါသည်။")
-                    elif st.button(f"☁️ {label} ကို Drive ထဲသိမ်းမည်", key=f"upload_{role}_{chosen_id}"):
-                        uploaded_id = None
+                    uploaded_id = drive_storage.upload_recording(config, chosen_id, role, audio)
+                    if not storage.save_session_audio(config, chosen_id, role, uploaded_id):
+                        raise ValueError("Worship history record no longer exists")
+                    st.session_state.pop(f"play_audio_{role}_{chosen_id}", None)
+                    st.success("အသံဖိုင်ကို Google Drive တွင် သိမ်းပြီးပါပြီ။")
+                    st.rerun()
+                except (KeyError, OSError, ValueError, psycopg.Error, googleapiclient.errors.HttpError):
+                    logger.exception("Could not save worship recording")
+                    if uploaded_id:
                         try:
-                            uploaded_id = drive_storage.upload_recording(config, chosen_id, role, audio)
-                            if not storage.save_session_audio(config, chosen_id, role, uploaded_id):
-                                raise ValueError("Worship history record no longer exists")
-                            st.success("အသံဖိုင်ကို Google Drive တွင် သိမ်းပြီးပါပြီ။")
-                            st.rerun()
-                        except (KeyError, OSError, ValueError, psycopg.Error, googleapiclient.errors.HttpError):
-                            logger.exception("Could not save worship recording")
-                            if uploaded_id:
-                                try:
-                                    drive_storage.delete_recording(config, uploaded_id)
-                                except (OSError, ValueError, psycopg.Error, googleapiclient.errors.HttpError):
-                                    logger.exception("Could not remove orphaned Drive recording")
-                            st.error("အသံဖိုင်ကို မသိမ်းနိုင်ပါ။ Drive connection နှင့် network ကို စစ်ပါ။")
-                if file_id:
-                    if st.button(f"▶️ {label} ဖွင့်မည်", key=f"play_{role}_{chosen_id}"):
-                        try:
-                            st.session_state[f"play_audio_{role}_{chosen_id}"] = drive_storage.download_recording(config, file_id)
-                        except (KeyError, OSError, ValueError, psycopg.Error, googleapiclient.errors.HttpError):
-                            logger.exception("Could not load worship recording")
-                            st.error("အသံဖိုင်ကို ဖွင့်မရပါ။ Drive connection ကို စစ်ပါ။")
-                    if f"play_audio_{role}_{chosen_id}" in st.session_state:
-                        st.audio(st.session_state[f"play_audio_{role}_{chosen_id}"], format="audio/wav")
-            st.caption("စတင်/ရပ်ရန်ကို ကိုယ်တိုင်နှိပ်ပါ။ Browser, network နှင့် upload အရွယ်အစားကန့်သတ်ချက်များ ရှိနိုင်ပါသည်။")
+                            drive_storage.delete_recording(config, uploaded_id)
+                        except (OSError, ValueError, psycopg.Error, googleapiclient.errors.HttpError):
+                            logger.exception("Could not remove orphaned Drive recording")
+                    st.error("အသံဖိုင်ကို မသိမ်းနိုင်ပါ။ Drive connection နှင့် network ကို စစ်ပါ။")
+        if file_id:
+            if st.button(f"▶️ {label} ဖွင့်မည်", key=f"play_{role}_{chosen_id}"):
+                try:
+                    st.session_state[f"play_audio_{role}_{chosen_id}"] = drive_storage.download_recording(config, file_id)
+                except (KeyError, OSError, ValueError, psycopg.Error, googleapiclient.errors.HttpError):
+                    logger.exception("Could not load worship recording")
+                    st.error("အသံဖိုင်ကို ဖွင့်မရပါ။ Drive connection ကို စစ်ပါ။")
+            if f"play_audio_{role}_{chosen_id}" in st.session_state:
+                recording = st.session_state[f"play_audio_{role}_{chosen_id}"]
+                st.audio(recording["data"], format=recording["mime_type"])
+    st.caption("အသံဖမ်းနေစဉ် စာမျက်နှာမပိတ်ပါနှင့်။ Browser, network နှင့် upload အရွယ်အစားကန့်သတ်ချက်များ ရှိနိုင်ပါသည်။")
 
 with st.sidebar:
     st.divider()

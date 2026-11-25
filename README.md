@@ -100,8 +100,9 @@ leader, teacher, and an original discussion outline are stored in PostgreSQL.
 History is paginated in the app and included in version 2 manual backups. The
 teaching outline is an offline template based on the verse reference, not
 copied from devotional publications; review scripture context before teaching.
-Find favorites, worship history, and recording controls in the sidebar. On a
-phone, open the sidebar using the arrows at the top left of the app.
+Find favorites and worship history in the sidebar. On a phone, open the sidebar
+using the arrows at the top left of the app. Recording controls appear on the
+main page for the history entry selected in the sidebar.
 
 Recording is optional and user-initiated. For audio uploads to work, configure
 a Google OAuth **Web application** client in Google Cloud:
@@ -137,13 +138,16 @@ connection instead of refreshing the old callback URL. OAuth codes are
 single-use and expire; the Google redirect URI must exactly match the `redirect_uri`
 in Secrets.
 
-From a history entry, recording starts only when the user explicitly presses
-Record, and upload is a separate confirmation. Recordings are stored in Drive,
-not the database. Playback is fetched through the app and limited to 200 MiB
-per file; browser microphone support, memory, upload size, network, and Drive
-quota limit practical duration. The app does not set a duration timer. Store
-and back up important audio separately in Drive; JSON backups contain Drive
-file IDs, not audio bytes.
+Choose a history entry, then use Start, Pause/Resume and Stop on the main page.
+After stopping, preview or download the recording locally and press the
+separate Drive save button. Recordings remain in the browser until stopped and
+can be lost if the page closes, reloads or the selected history entry changes.
+Recordings use a format supported by the browser (WebM, MP4, or Ogg) and are
+stored in Drive, not the database. Playback is fetched through the app and
+limited to 200 MiB per file; browser microphone and codec support, memory,
+upload size, network, and Drive quota limit practical duration. The app does
+not set a duration timer. Store and back up important audio separately in
+Drive; JSON backups contain Drive file IDs, not audio bytes.
 
 The shared family password is not per-person identity. Anyone who knows it
 can access all family history and recordings, so protect it and the Google

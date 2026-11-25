@@ -16,6 +16,7 @@ from google_auth_oauthlib.flow import Flow
 from oauthlib.oauth2 import OAuth2Error
 
 import storage
+from recorder import FORMATS
 
 logger = logging.getLogger(__name__)
 SCOPES = ["https://www.googleapis.com/auth/drive.file"]
@@ -184,17 +185,21 @@ def _folder_id(config, service):
     return folder_id
 
 
-def upload_recording(config, session_id, role, uploaded_file):
+def upload_recording(config, session_id, role, recording):
     if role not in ("prayer", "teaching"):
         raise ValueError("Invalid recording role")
-    if uploaded_file.size <= 0 or uploaded_file.size > MAX_RECORDING_BYTES:
+    data = recording["data"]
+    mime_type = recording["mime_type"]
+    if mime_type not in FORMATS:
+        raise ValueError("Unsupported recording format")
+    if len(data) <= 0 or len(data) > MAX_RECORDING_BYTES:
         raise ValueError("Recording must be between 1 byte and 200 MiB")
     service = _drive_service(config)
     folder_id = _folder_id(config, service)
-    filename = f"worship-{session_id}-{role}.wav"
+    filename = f"worship-{session_id}-{role}.{FORMATS[mime_type]}"
     media = googleapiclient.http.MediaIoBaseUpload(
-        io.BytesIO(uploaded_file.getvalue()),
-        mimetype=uploaded_file.type or "audio/wav",
+        io.BytesIO(data),
+        mimetype=mime_type,
         chunksize=8 * 1024 * 1024,
         resumable=True,
     )
@@ -213,6 +218,10 @@ def delete_recording(config, file_id):
 
 def download_recording(config, file_id):
     service = _drive_service(config)
+    metadata = service.files().get(fileId=file_id, fields="mimeType").execute()
+    mime_type = metadata["mimeType"]
+    if mime_type not in FORMATS:
+        raise ValueError("Unsupported recording format")
     request = service.files().get_media(fileId=file_id)
     buffer = io.BytesIO()
     downloader = googleapiclient.http.MediaIoBaseDownload(buffer, request, chunksize=8 * 1024 * 1024)
@@ -221,7 +230,7 @@ def download_recording(config, file_id):
         _, done = downloader.next_chunk()
         if buffer.tell() > MAX_RECORDING_BYTES:
             raise ValueError("Recording exceeds the 200 MiB playback limit")
-    return buffer.getvalue()
+    return {"data": buffer.getvalue(), "mime_type": mime_type}
 
 
 def show_drive_connection(config):
