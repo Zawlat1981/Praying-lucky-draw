@@ -1,5 +1,11 @@
+import base64
+import hashlib
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, PropertyMock, patch
+from urllib.parse import parse_qs, urlparse
+
+from cryptography.fernet import Fernet
+from oauthlib.oauth2 import InvalidGrantError
 
 import drive_storage
 import family_auth
@@ -16,14 +22,58 @@ class FamilyFeatureTest(unittest.TestCase):
         self.assertIn("တိုက်ရိုက်ကူးထားခြင်း မဟုတ်", outline["source_note"])
 
     def test_drive_oauth_state_is_signed_and_expires(self):
-        settings = {"token_encryption_key": "test-key-not-used-for-fernet-here"}
+        settings = {"token_encryption_key": Fernet.generate_key().decode()}
         with patch.object(drive_storage.time, "time", return_value=1000):
-            state = drive_storage._make_oauth_state(settings)
+            state = drive_storage._make_oauth_state(settings, "test-verifier")
         with patch.object(drive_storage.time, "time", return_value=1001):
-            self.assertTrue(drive_storage._verify_oauth_state(settings, state))
-            self.assertFalse(drive_storage._verify_oauth_state(settings, state + "tampered"))
+            self.assertEqual(drive_storage._oauth_verifier(settings, state), "test-verifier")
+            with self.assertRaises(ValueError):
+                drive_storage._oauth_verifier(settings, state[:20] + ("A" if state[20] != "A" else "B") + state[21:])
         with patch.object(drive_storage.time, "time", return_value=1601):
-            self.assertFalse(drive_storage._verify_oauth_state(settings, state))
+            with self.assertRaises(ValueError):
+                drive_storage._oauth_verifier(settings, state)
+
+    def test_oauth_callback_uses_the_original_pkce_verifier(self):
+        settings = {
+            "client_id": "test-client",
+            "client_secret": "test-secret",
+            "redirect_uri": "https://example.streamlit.app/",
+            "token_encryption_key": Fernet.generate_key().decode(),
+        }
+        credentials = MagicMock(refresh_token="refresh-token")
+        captured = {}
+
+        def fetch_token(flow, **kwargs):
+            captured["verifier"] = flow.code_verifier
+            captured["code"] = kwargs["code"]
+
+        with (
+            patch.object(drive_storage, "_settings", return_value=settings),
+            patch.object(drive_storage.Flow, "fetch_token", autospec=True, side_effect=fetch_token),
+            patch.object(drive_storage.Flow, "credentials", new_callable=PropertyMock, return_value=credentials),
+            patch.object(drive_storage, "_save_encrypted_credentials") as save,
+        ):
+            params = parse_qs(urlparse(drive_storage.authorization_url()).query)
+            state = params["state"][0]
+            drive_storage.handle_callback({}, {"state": state, "code": "authorization-code"})
+            verifier = captured["verifier"]
+            challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode("ascii")).digest()).decode().rstrip("=")
+            self.assertEqual(params["code_challenge"], [challenge])
+            self.assertNotIn(verifier, state)
+            self.assertEqual(captured["code"], "authorization-code")
+            save.assert_called_once_with({}, credentials)
+
+    def test_rejected_oauth_code_is_cleared_and_reported(self):
+        query = {"code": "expired-code", "state": "state"}
+        with (
+            patch.object(drive_storage.st, "query_params", query),
+            patch.object(drive_storage.st, "subheader"),
+            patch.object(drive_storage.st, "error") as error,
+            patch.object(drive_storage, "handle_callback", side_effect=InvalidGrantError()),
+        ):
+            drive_storage.show_drive_connection({})
+            self.assertEqual(query, {})
+            error.assert_called_once()
 
     def test_family_password_is_required_and_authenticated_sessions_pass(self):
         state = {}

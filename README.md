@@ -100,6 +100,8 @@ leader, teacher, and an original discussion outline are stored in PostgreSQL.
 History is paginated in the app and included in version 2 manual backups. The
 teaching outline is an offline template based on the verse reference, not
 copied from devotional publications; review scripture context before teaching.
+Find favorites, worship history, and recording controls in the sidebar. On a
+phone, open the sidebar using the arrows at the top left of the app.
 
 Recording is optional and user-initiated. For audio uploads to work, configure
 a Google OAuth **Web application** client in Google Cloud:
@@ -129,6 +131,11 @@ recordings folder. OAuth refresh tokens are encrypted in PostgreSQL. While the
 OAuth app remains in testing mode, Google may expire refresh tokens after
 seven days; reconnect Drive when prompted. Public use beyond test users may
 require Google verification.
+
+If Google rejects an authorization code, reopen the app and start a fresh Drive
+connection instead of refreshing the old callback URL. OAuth codes are
+single-use and expire; the Google redirect URI must exactly match the `redirect_uri`
+in Secrets.
 
 From a history entry, recording starts only when the user explicitly presses
 Record, and upload is a separate confirmation. Recordings are stored in Drive,

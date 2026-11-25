@@ -90,15 +90,21 @@ class PrayerAppTest(unittest.TestCase):
             app = self.app()
             self.assertFalse(app.exception)
             self.assertTrue(any("31044" in item.value for item in app.subheader))
+            self.assertTrue(any(item.value == "⭐ အကြိုက်ဆုံးကျမ်းချက်များ" for item in app.sidebar.subheader))
+            self.assertTrue(any(item.value == "🕰️ ဝတ်ပြုမှု History" for item in app.sidebar.subheader))
+            self.assertTrue(any(item.label == "ကျမ်းချက်ကို ရှာပြီး မှတ်ထားရန်" for item in app.sidebar.expander))
             next(button for button in app.button if button.label.startswith("ကျမ်းချက်နှင့် တာဝန်ကျသူများ")).click().run()
             self.assertFalse(app.exception)
             self.assertEqual(len(sessions), 1)
             self.assertTrue(sessions[0]["teaching"]["title"])
-            next(button for button in app.button if button.label == "⭐ ရွေးထားသောကျမ်းချက်ကို မှတ်ထားမည်").click().run()
+            self.assertTrue(any(item.label == "ပြန်ကြည့်ရန် ဝတ်ပြုမှုရွေးပါ" for item in app.sidebar.selectbox))
+            self.assertTrue(any(item.label == "🎙️ ရွေးချယ်ပါက အသံဖမ်းပြီး Google Drive တွင် သိမ်းရန်" for item in app.sidebar.expander))
+            next(button for button in app.sidebar.button if button.label == "⭐ ရွေးထားသောကျမ်းချက်ကို မှတ်ထားမည်").click().run()
             self.assertEqual(len(favorites), 1)
             new_session = self.app()
             self.assertFalse(new_session.exception)
-            self.assertTrue(any(favorites[0]["text"] == item.value for item in new_session.info))
+            self.assertTrue(any(favorites[0]["text"] == item.value for item in new_session.sidebar.info))
+            self.assertTrue(any(item.label == "ပြန်ကြည့်ရန် ဝတ်ပြုမှုရွေးပါ" for item in new_session.sidebar.selectbox))
 
     def test_database_error_does_not_report_success(self):
         import psycopg

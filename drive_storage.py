@@ -1,6 +1,3 @@
-import base64
-import hashlib
-import hmac
 import io
 import json
 import logging
@@ -16,6 +13,7 @@ import streamlit as st
 from cryptography.fernet import Fernet, InvalidToken
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
+from oauthlib.oauth2 import OAuth2Error
 
 import storage
 
@@ -40,7 +38,7 @@ def _fernet(settings):
         raise ValueError("Invalid Drive token encryption key") from error
 
 
-def _flow(settings, state=None):
+def _flow(settings, state=None, code_verifier=None):
     client_config = {
         "web": {
             "client_id": settings["client_id"],
@@ -50,31 +48,32 @@ def _flow(settings, state=None):
             "redirect_uris": [settings["redirect_uri"]],
         }
     }
-    flow = Flow.from_client_config(client_config, scopes=SCOPES, state=state)
+    flow = Flow.from_client_config(
+        client_config, scopes=SCOPES, state=state,
+        code_verifier=code_verifier, autogenerate_code_verifier=False,
+    )
     flow.redirect_uri = settings["redirect_uri"]
     return flow
 
 
-def _make_oauth_state(settings):
-    payload = base64.urlsafe_b64encode(
-        json.dumps({"nonce": secrets.token_urlsafe(24), "expires": int(time.time()) + 600}).encode("utf-8")
-    ).decode("ascii").rstrip("=")
-    signature = hmac.new(settings["token_encryption_key"].encode("ascii"), payload.encode("ascii"), hashlib.sha256).hexdigest()
-    return f"{payload}.{signature}"
+def _make_oauth_state(settings, code_verifier):
+    payload = json.dumps({
+        "nonce": secrets.token_urlsafe(24),
+        "expires": int(time.time()) + 600,
+        "code_verifier": code_verifier,
+    }).encode("utf-8")
+    return _fernet(settings).encrypt(payload).decode("ascii")
 
 
-def _verify_oauth_state(settings, state):
+def _oauth_verifier(settings, state):
     try:
-        payload, signature = state.split(".", 1)
-        expected = hmac.new(
-            settings["token_encryption_key"].encode("ascii"), payload.encode("ascii"), hashlib.sha256
-        ).hexdigest()
-        if not hmac.compare_digest(signature, expected):
-            return False
-        decoded = base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4))
-        return int(json.loads(decoded)["expires"]) >= int(time.time())
-    except (ValueError, KeyError, TypeError, json.JSONDecodeError, UnicodeDecodeError):
-        return False
+        decoded = json.loads(_fernet(settings).decrypt(state.encode("ascii")).decode("utf-8"))
+        verifier = decoded["code_verifier"]
+        if int(decoded["expires"]) < int(time.time()) or not isinstance(verifier, str) or not verifier:
+            raise ValueError("Invalid or expired OAuth state")
+        return verifier
+    except (InvalidToken, KeyError, TypeError, UnicodeError, json.JSONDecodeError) as error:
+        raise ValueError("Invalid or expired OAuth state") from error
 
 
 def _save_encrypted_credentials(config, credentials):
@@ -111,14 +110,13 @@ def _load_credentials(config):
 def handle_callback(config, query_params):
     settings = _settings()
     state = str(query_params.get("state", ""))
-    if not _verify_oauth_state(settings, state):
-        raise ValueError("Google OAuth state does not match")
+    verifier = _oauth_verifier(settings, state)
     if query_params.get("error"):
         raise ValueError("Google authorization was not completed")
     code = query_params.get("code")
     if not code:
         raise ValueError("Google OAuth authorization code is missing")
-    flow = _flow(settings)
+    flow = _flow(settings, state=state, code_verifier=verifier)
     flow.fetch_token(code=code)
     if not flow.credentials.refresh_token:
         raise ValueError("Google did not provide a refresh token; revoke app access and reconnect")
@@ -127,8 +125,9 @@ def handle_callback(config, query_params):
 
 def authorization_url():
     settings = _settings()
-    state = _make_oauth_state(settings)
-    flow = _flow(settings, state=state)
+    verifier = secrets.token_urlsafe(64)
+    state = _make_oauth_state(settings, verifier)
+    flow = _flow(settings, state=state, code_verifier=verifier)
     url, _ = flow.authorization_url(
         access_type="offline",
         include_granted_scopes="true",
@@ -230,8 +229,9 @@ def show_drive_connection(config):
     try:
         query = st.query_params
         if query.get("code") or query.get("error"):
-            handle_callback(config, query)
+            callback_params = {key: query.get(key) for key in ("code", "state", "error")}
             st.query_params.clear()
+            handle_callback(config, callback_params)
             st.success("Google Drive ချိတ်ဆက်ပြီးပါပြီ။")
             st.rerun()
         credentials = _load_credentials(config)
@@ -241,6 +241,9 @@ def show_drive_connection(config):
             url = authorization_url()
             st.link_button("Google Drive ချိတ်ဆက်ရန်", url)
             st.caption("Google account authorization လိုအပ်ပါသည်။ Client secret ကို chat သို့ မပို့ပါနှင့်။")
+    except OAuth2Error:
+        logger.warning("Google rejected the authorization request or code")
+        st.error("Google ခွင့်ပြုချက် မအောင်မြင်ပါ။ စာမျက်နှာကို ပြန်ဖွင့်ပြီး Google Drive ကို ထပ်မံချိတ်ဆက်ပါ။")
     except (KeyError, OSError, ValueError, psycopg.Error, googleapiclient.errors.HttpError):
         logger.exception("Could not connect Google Drive")
         st.error("Google Drive မချိတ်ဆက်နိုင်ပါ။ OAuth Secrets နှင့် connection ကို စစ်ဆေးပါ။")

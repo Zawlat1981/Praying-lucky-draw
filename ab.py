@@ -148,126 +148,127 @@ if current_session_id:
         st.write(f"**ဆုတောင်းရန်:** {current['teaching']['prayer']}")
         st.caption(current["teaching"]["source_note"])
 
-st.divider()
-st.subheader("⭐ အကြိုက်ဆုံးကျမ်းချက်များ")
-with st.expander("ကျမ်းချက်ကို ရှာပြီး မှတ်ထားရန်"):
-    books = list(dict.fromkeys(item["book"] for item in all_verses))
-    book = st.selectbox("ကျမ်းအမည်", books)
-    chapters = sorted({item["chapter"] for item in all_verses if item["book"] == book})
-    chapter = st.selectbox("အခန်းကြီး", chapters)
-    matches = [item for item in all_verses if item["book"] == book and item["chapter"] == chapter]
-    chosen = st.selectbox(
-        "အခန်းငယ်",
-        range(len(matches)),
-        format_func=lambda index: f"{matches[index]['verse']} — {matches[index]['text'][:80]}",
-    )
-    show_verse(matches[chosen])
-    if st.button("⭐ ရွေးထားသောကျမ်းချက်ကို မှတ်ထားမည်"):
-        try:
-            if storage.save_verse(config, "prayer_favorites", matches[chosen]):
-                st.session_state["save_msg"] = "⭐ အကြိုက်ဆုံးကျမ်းချက်ကို သိမ်းပြီးပါပြီ။"
-                st.rerun()
-            else:
-                st.warning("ဤကျမ်းချက်ကို မှတ်ထားပြီးဖြစ်ပါသည်။")
-        except psycopg.Error:
-            logger.exception("Could not save favorite verse")
-            st.error("ကျမ်းချက်ကို မသိမ်းနိုင်ပါ။")
-
-for favorite in favorites:
-    with st.expander(f"⭐ {favorite['book']} {favorite['chapter']}:{favorite['verse']}"):
-        show_verse(favorite)
-if not favorites:
-    st.write("မှတ်ထားသော ကျမ်းချက် မရှိသေးပါ။")
-
-st.divider()
-st.subheader("🕰️ ဝတ်ပြုမှု History")
-try:
-    history_count = storage.count_worship_sessions(config)
-    page_size = 20
-    page_count = (history_count + page_size - 1) // page_size
-    page = min(st.session_state.get("history_page", 0), max(page_count - 1, 0))
-    st.session_state["history_page"] = page
-    previous, page_label, following = st.columns([1, 2, 1])
-    if previous.button("← ရှေ့", disabled=page <= 0):
-        st.session_state["history_page"] -= 1
-        st.rerun()
-    page_label.caption(f"{page + 1 if page_count else 0} / {page_count} · စုစုပေါင်း {history_count}")
-    if following.button("နောက် →", disabled=page + 1 >= page_count):
-        st.session_state["history_page"] += 1
-        st.rerun()
-    records = storage.list_worship_sessions(config, limit=page_size, offset=page * page_size)
-except psycopg.Error:
-    logger.exception("Could not load worship history")
-    records = []
-    st.error("History ဖတ်မရပါ။ Database connection ကို စစ်ပါ။")
-
-if records:
-    options = {str(item["id"]): item for item in records}
-    chosen_id = st.selectbox(
-        "ပြန်ကြည့်ရန် ဝတ်ပြုမှုရွေးပါ",
-        list(options),
-        format_func=lambda session_id: (
-            f"{options[session_id]['created_at'].astimezone().strftime('%Y-%m-%d %H:%M')} · "
-            f"{options[session_id]['verse']['book']} {options[session_id]['verse']['chapter']}:"
-            f"{options[session_id]['verse']['verse']} · {options[session_id]['leader']} / "
-            f"{options[session_id]['teacher']}"
-        ),
-    )
-    selected = options[chosen_id]
-    show_verse(selected["verse"])
-    st.markdown(f"**ဆုတောင်းဦးဆောင်သူ:** {selected['leader']}")
-    st.markdown(f"**ကျမ်းစာအားဖြင့် လမ်းပြသွန်သင်သူ:** {selected['teacher']}")
-    st.markdown(f"#### {selected['teaching']['title']}")
-    st.write(selected["teaching"]["theme"])
-    for index, point in enumerate(selected["teaching"]["outline"], 1):
-        st.write(f"{index}. {point}")
-    st.write(f"**ဆွေးနွေးရန်:** {selected['teaching']['discussion']}")
-    st.write(f"**လက်တွေ့ကျင့်သုံးရန်:** {selected['teaching']['application']}")
-    st.caption(selected["teaching"]["source_note"])
-
-    with st.expander("🎙️ ရွေးချယ်ပါက အသံဖမ်းပြီး Google Drive တွင် သိမ်းရန်"):
-        drive_storage.show_drive_connection(config)
-        audio_jobs = (
-            ("prayer", "ဆုတောင်းဦးဆောင်သူ၏ အသံ", selected["prayer_audio_file_id"]),
-            ("teaching", "သွန်သင်သူ၏ အသံ", selected["teaching_audio_file_id"]),
+with st.sidebar:
+    st.divider()
+    st.subheader("⭐ အကြိုက်ဆုံးကျမ်းချက်များ")
+    with st.expander("ကျမ်းချက်ကို ရှာပြီး မှတ်ထားရန်"):
+        books = list(dict.fromkeys(item["book"] for item in all_verses))
+        book = st.selectbox("ကျမ်းအမည်", books)
+        chapters = sorted({item["chapter"] for item in all_verses if item["book"] == book})
+        chapter = st.selectbox("အခန်းကြီး", chapters)
+        matches = [item for item in all_verses if item["book"] == book and item["chapter"] == chapter]
+        chosen = st.selectbox(
+            "အခန်းငယ်",
+            range(len(matches)),
+            format_func=lambda index: f"{matches[index]['verse']} — {matches[index]['text'][:80]}",
         )
-        for role, label, file_id in audio_jobs:
-            st.markdown(f"**{label}**")
-            audio = None
+        show_verse(matches[chosen])
+        if st.button("⭐ ရွေးထားသောကျမ်းချက်ကို မှတ်ထားမည်"):
             try:
-                audio = st.audio_input("Record ကိုနှိပ်မှ အသံဖမ်းမည်", key=f"audio_{role}_{chosen_id}")
-            except (OSError, RuntimeError):
-                logger.exception("Audio recording widget is unavailable")
-                st.error("ဤ browser တွင် အသံဖမ်းမရပါ။ Microphone ခွင့်ပြုချက်နှင့် browser ကို စစ်ပါ။")
-            if audio is not None:
-                if audio.size > drive_storage.MAX_RECORDING_BYTES:
-                    st.error("ဖိုင်အရွယ်အစားသည် 200 MiB ထက် ကျော်နေပါသည်။")
-                elif st.button(f"☁️ {label} ကို Drive ထဲသိမ်းမည်", key=f"upload_{role}_{chosen_id}"):
-                    uploaded_id = None
-                    try:
-                        uploaded_id = drive_storage.upload_recording(config, chosen_id, role, audio)
-                        if not storage.save_session_audio(config, chosen_id, role, uploaded_id):
-                            raise ValueError("Worship history record no longer exists")
-                        st.success("အသံဖိုင်ကို Google Drive တွင် သိမ်းပြီးပါပြီ။")
-                        st.rerun()
-                    except (KeyError, OSError, ValueError, psycopg.Error, googleapiclient.errors.HttpError):
-                        logger.exception("Could not save worship recording")
-                        if uploaded_id:
-                            try:
-                                drive_storage.delete_recording(config, uploaded_id)
-                            except (OSError, ValueError, psycopg.Error, googleapiclient.errors.HttpError):
-                                logger.exception("Could not remove orphaned Drive recording")
-                        st.error("အသံဖိုင်ကို မသိမ်းနိုင်ပါ။ Drive connection နှင့် network ကို စစ်ပါ။")
-            if file_id:
-                if st.button(f"▶️ {label} ဖွင့်မည်", key=f"play_{role}_{chosen_id}"):
-                    try:
-                        st.session_state[f"play_audio_{role}_{chosen_id}"] = drive_storage.download_recording(config, file_id)
-                    except (KeyError, OSError, ValueError, psycopg.Error, googleapiclient.errors.HttpError):
-                        logger.exception("Could not load worship recording")
-                        st.error("အသံဖိုင်ကို ဖွင့်မရပါ။ Drive connection ကို စစ်ပါ။")
-                if f"play_audio_{role}_{chosen_id}" in st.session_state:
-                    st.audio(st.session_state[f"play_audio_{role}_{chosen_id}"], format="audio/wav")
-        st.caption("စတင်/ရပ်ရန်ကို ကိုယ်တိုင်နှိပ်ပါ။ Browser, network နှင့် upload အရွယ်အစားကန့်သတ်ချက်များ ရှိနိုင်ပါသည်။")
+                if storage.save_verse(config, "prayer_favorites", matches[chosen]):
+                    st.session_state["save_msg"] = "⭐ အကြိုက်ဆုံးကျမ်းချက်ကို သိမ်းပြီးပါပြီ။"
+                    st.rerun()
+                else:
+                    st.warning("ဤကျမ်းချက်ကို မှတ်ထားပြီးဖြစ်ပါသည်။")
+            except psycopg.Error:
+                logger.exception("Could not save favorite verse")
+                st.error("ကျမ်းချက်ကို မသိမ်းနိုင်ပါ။")
+
+    for favorite in favorites:
+        with st.expander(f"⭐ {favorite['book']} {favorite['chapter']}:{favorite['verse']}"):
+            show_verse(favorite)
+    if not favorites:
+        st.write("မှတ်ထားသော ကျမ်းချက် မရှိသေးပါ။")
+
+    st.divider()
+    st.subheader("🕰️ ဝတ်ပြုမှု History")
+    try:
+        history_count = storage.count_worship_sessions(config)
+        page_size = 20
+        page_count = (history_count + page_size - 1) // page_size
+        page = min(st.session_state.get("history_page", 0), max(page_count - 1, 0))
+        st.session_state["history_page"] = page
+        previous, page_label, following = st.columns([1, 2, 1])
+        if previous.button("← ရှေ့", disabled=page <= 0):
+            st.session_state["history_page"] -= 1
+            st.rerun()
+        page_label.caption(f"{page + 1 if page_count else 0} / {page_count} · စုစုပေါင်း {history_count}")
+        if following.button("နောက် →", disabled=page + 1 >= page_count):
+            st.session_state["history_page"] += 1
+            st.rerun()
+        records = storage.list_worship_sessions(config, limit=page_size, offset=page * page_size)
+    except psycopg.Error:
+        logger.exception("Could not load worship history")
+        records = []
+        st.error("History ဖတ်မရပါ။ Database connection ကို စစ်ပါ။")
+
+    if records:
+        options = {str(item["id"]): item for item in records}
+        chosen_id = st.selectbox(
+            "ပြန်ကြည့်ရန် ဝတ်ပြုမှုရွေးပါ",
+            list(options),
+            format_func=lambda session_id: (
+                f"{options[session_id]['created_at'].astimezone().strftime('%Y-%m-%d %H:%M')} · "
+                f"{options[session_id]['verse']['book']} {options[session_id]['verse']['chapter']}:"
+                f"{options[session_id]['verse']['verse']} · {options[session_id]['leader']} / "
+                f"{options[session_id]['teacher']}"
+            ),
+        )
+        selected = options[chosen_id]
+        show_verse(selected["verse"])
+        st.markdown(f"**ဆုတောင်းဦးဆောင်သူ:** {selected['leader']}")
+        st.markdown(f"**ကျမ်းစာအားဖြင့် လမ်းပြသွန်သင်သူ:** {selected['teacher']}")
+        st.markdown(f"#### {selected['teaching']['title']}")
+        st.write(selected["teaching"]["theme"])
+        for index, point in enumerate(selected["teaching"]["outline"], 1):
+            st.write(f"{index}. {point}")
+        st.write(f"**ဆွေးနွေးရန်:** {selected['teaching']['discussion']}")
+        st.write(f"**လက်တွေ့ကျင့်သုံးရန်:** {selected['teaching']['application']}")
+        st.caption(selected["teaching"]["source_note"])
+
+        with st.expander("🎙️ ရွေးချယ်ပါက အသံဖမ်းပြီး Google Drive တွင် သိမ်းရန်"):
+            drive_storage.show_drive_connection(config)
+            audio_jobs = (
+                ("prayer", "ဆုတောင်းဦးဆောင်သူ၏ အသံ", selected["prayer_audio_file_id"]),
+                ("teaching", "သွန်သင်သူ၏ အသံ", selected["teaching_audio_file_id"]),
+            )
+            for role, label, file_id in audio_jobs:
+                st.markdown(f"**{label}**")
+                audio = None
+                try:
+                    audio = st.audio_input("Record ကိုနှိပ်မှ အသံဖမ်းမည်", key=f"audio_{role}_{chosen_id}")
+                except (OSError, RuntimeError):
+                    logger.exception("Audio recording widget is unavailable")
+                    st.error("ဤ browser တွင် အသံဖမ်းမရပါ။ Microphone ခွင့်ပြုချက်နှင့် browser ကို စစ်ပါ။")
+                if audio is not None:
+                    if audio.size > drive_storage.MAX_RECORDING_BYTES:
+                        st.error("ဖိုင်အရွယ်အစားသည် 200 MiB ထက် ကျော်နေပါသည်။")
+                    elif st.button(f"☁️ {label} ကို Drive ထဲသိမ်းမည်", key=f"upload_{role}_{chosen_id}"):
+                        uploaded_id = None
+                        try:
+                            uploaded_id = drive_storage.upload_recording(config, chosen_id, role, audio)
+                            if not storage.save_session_audio(config, chosen_id, role, uploaded_id):
+                                raise ValueError("Worship history record no longer exists")
+                            st.success("အသံဖိုင်ကို Google Drive တွင် သိမ်းပြီးပါပြီ။")
+                            st.rerun()
+                        except (KeyError, OSError, ValueError, psycopg.Error, googleapiclient.errors.HttpError):
+                            logger.exception("Could not save worship recording")
+                            if uploaded_id:
+                                try:
+                                    drive_storage.delete_recording(config, uploaded_id)
+                                except (OSError, ValueError, psycopg.Error, googleapiclient.errors.HttpError):
+                                    logger.exception("Could not remove orphaned Drive recording")
+                            st.error("အသံဖိုင်ကို မသိမ်းနိုင်ပါ။ Drive connection နှင့် network ကို စစ်ပါ။")
+                if file_id:
+                    if st.button(f"▶️ {label} ဖွင့်မည်", key=f"play_{role}_{chosen_id}"):
+                        try:
+                            st.session_state[f"play_audio_{role}_{chosen_id}"] = drive_storage.download_recording(config, file_id)
+                        except (KeyError, OSError, ValueError, psycopg.Error, googleapiclient.errors.HttpError):
+                            logger.exception("Could not load worship recording")
+                            st.error("အသံဖိုင်ကို ဖွင့်မရပါ။ Drive connection ကို စစ်ပါ။")
+                    if f"play_audio_{role}_{chosen_id}" in st.session_state:
+                        st.audio(st.session_state[f"play_audio_{role}_{chosen_id}"], format="audio/wav")
+            st.caption("စတင်/ရပ်ရန်ကို ကိုယ်တိုင်နှိပ်ပါ။ Browser, network နှင့် upload အရွယ်အစားကန့်သတ်ချက်များ ရှိနိုင်ပါသည်။")
 
 with st.sidebar:
     st.divider()
